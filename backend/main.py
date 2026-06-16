@@ -25,9 +25,30 @@ PIECE_VALUES = {
     chess.KING:      0,
 }
 
+def ordered_moves(board: chess.Board):
+    moves = list(board.legal_moves)
+
+    def move_score(move):
+        score = 0
+
+        if board.is_capture(move):
+            score += 1000
+
+            captured = board.piece_at(move.to_square)
+            attacker = board.piece_at(move.from_square)
+
+            if captured and attacker:
+                score += PIECE_VALUES[captured.piece_type] - PIECE_VALUES[attacker.piece_type] // 10
+
+        if move.promotion:
+            score += 800
+        
+        return score
+    return sorted(moves, key=move_score, reverse=True)
+
 def evaluate_board(board: chess.Board) -> int: 
     if board.is_checkmate():
-        return -10000 if board.turn == chess.WHITE else 10000
+        return -100000 if board.turn == chess.WHITE else 100000
     if board.is_stalemate():
         return 0
 
@@ -50,7 +71,7 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
     if maximizing:
         best_score = float("-inf")
 
-        for move in board.legal_moves:
+        for move in ordered_moves(board):
             board.push(move)
             score = alphabeta(board, depth - 1, alpha, beta, False)
             board.pop()
@@ -66,7 +87,7 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
     else:
         best_score = float("inf")
 
-        for move in board.legal_moves:
+        for move in ordered_moves(board):
             board.push(move)
             score = alphabeta(board, depth - 1, alpha, beta, True)
 
@@ -91,7 +112,7 @@ def ai_move(req: MoveRequest):
     best_move = None
     best_score = float("inf")
 
-    for move in board.legal_moves:
+    for move in ordered_moves(board):
         board.push(move)
         
         score = alphabeta(board=board, depth=3, alpha=float("-inf"), beta=float("inf"), maximizing=True)
