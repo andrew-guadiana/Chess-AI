@@ -43,29 +43,40 @@ def evaluate_board(board: chess.Board) -> int:
     return score
         
 
-def minimax(board: chess.Board, depth: int, maximizing: bool) -> int:
+def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximizing: bool) -> int:
     if depth == 0 or board.is_game_over():
         return evaluate_board(board)
 
     if maximizing:
         best_score = float("-inf")
+
         for move in board.legal_moves:
             board.push(move)
-            score = minimax(board, depth - 1, False)
+            score = alphabeta(board, depth - 1, alpha, beta, False)
             board.pop()
 
             best_score = max(best_score, score)
+            alpha = max(alpha, best_score)
+
+            if alpha >= beta:
+                break
 
         return best_score
+
     else:
         best_score = float("inf")
 
         for move in board.legal_moves:
             board.push(move)
-            score = minimax(board, depth - 1, True)
+            score = alphabeta(board, depth - 1, alpha, beta, True)
+
             board.pop()
 
             best_score = min(best_score, score)
+            beta = min(beta, best_score)
+
+            if alpha >= beta:
+                break
         
         return best_score
 
@@ -83,7 +94,7 @@ def ai_move(req: MoveRequest):
     for move in board.legal_moves:
         board.push(move)
         
-        score = minimax(board, depth=2, maximizing=True)
+        score = alphabeta(board=board, depth=3, alpha=float("-inf"), beta=float("inf"), maximizing=True)
         board.pop()
 
         if score < best_score:
