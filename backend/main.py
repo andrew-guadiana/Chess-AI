@@ -29,8 +29,20 @@ PIECE_VALUES = {
 
 def evaluate_board(board: chess.Board) -> int:
     if board.is_checkmate():
-        return 1
-    return 0
+        return -10000 if board.turn == chess.WHITE else 10000
+    if board.is_stalemate():
+        return 0
+
+    score = 0
+    for piece in board.piece_map().values():
+        value = PIECE_VALUES[piece.piece_type]
+
+        if piece.color == chess.WHITE:
+            score += value
+        else:
+            score -= value
+
+    return score
 
 @app.post("/ai-move")
 def ai_move(req: MoveRequest):
@@ -40,11 +52,20 @@ def ai_move(req: MoveRequest):
         return {"move": None, "fen": board.fen()}
 
     legal_moves = list(board.legal_moves)
-    if not legal_moves:
-        return {"move": None, "fen": board.fen()}
 
-    move = random.choice(legal_moves)
-    board.push(move)
+    best_move = None
+    best_score = float("inf")
+
+    for move in legal_moves:
+        board.push(move)
+        score = evaluate_board(board)
+        board.pop()
+
+        if score < best_score:
+            best_score = score
+            best_move = move
+
+    board.push(best_move)
 
     return {
         "move": move.uci(),
