@@ -8,7 +8,7 @@
 - [X] Quiescence search
 - [X] Positional Considerations
 - [X] Iterative Deepening
-- [ ] Time limited search
+- [X] Time limited search
 - [ ] Opening Book
 - [ ] King Safety
 

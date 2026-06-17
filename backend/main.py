@@ -120,7 +120,7 @@ def noisy_moves(board: chess.Board):
             800 if move.promotion else 0
             ), reverse=True)
 
-def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, end_time: float, depth=1) -> int:
+def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, end_time: float, depth=3) -> int:
     if time.perf_counter() >= end_time:
         raise SearchTimeout
 
@@ -145,8 +145,10 @@ def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, 
     for move in noisy_moves(board):
         board.push(move)
 
-        score = quiescence(board, alpha, beta, not maximizing, end_time, depth - 1)
-        board.pop()
+        try:
+            score = quiescence(board, alpha, beta, not maximizing, end_time, depth - 1)
+        finally:
+            board.pop()
 
         if maximizing:
             alpha = max(alpha, score)
@@ -207,9 +209,13 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
         best_score = NEG_INF
 
         for move in ordered_moves(board):
+            print("testing ordered moves...")
             board.push(move)
-            score = alphabeta(board, depth - 1, alpha, beta, False, end_time)
-            board.pop()
+            try:
+                score = alphabeta(board, depth - 1, alpha, beta, False, end_time)
+            finally:
+                board.pop()
+            print("Score;", move, score)
 
             best_score = max(best_score, score)
             alpha = max(alpha, best_score)
@@ -224,9 +230,10 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
 
         for move in ordered_moves(board):
             board.push(move)
-            score = alphabeta(board, depth - 1, alpha, beta, True, end_time)
-
-            board.pop()
+            try:
+                score = alphabeta(board, depth - 1, alpha, beta, True, end_time)
+            finally:
+                board.pop()
 
             best_score = min(best_score, score)
             beta = min(beta, best_score)
@@ -238,29 +245,37 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
 
 def find_best_move(board, time_limit=5.0):
     end_time = time.perf_counter() + time_limit
-    best_move = None
+
+    legal_moves = list(board.legal_moves)
+    best_move = legal_moves[0].uci()
 
     depth = 1
 
     try:
         while True:
-            current_best_move = None
+            print("SEARCH DEPTH: ", depth)
+            current_best_move = list(board.legal_moves)[0].uci()
             current_best_score = POS_INF
 
             for move in ordered_moves(board):
                 board.push(move)
         
-                score = alphabeta(board=board, depth=depth, alpha=NEG_INF, beta=POS_INF, maximizing=True, end_time=end_time)
-                board.pop()
+                try:
+                    score = alphabeta(board=board, depth=depth, alpha=NEG_INF, beta=POS_INF, maximizing=True, end_time=end_time)
+                finally:
+                    board.pop()
 
                 if score < current_best_score:
                     current_best_score = score
                     current_best_move = move.uci()
 
+
             best_move = current_best_move
+            print("COMPLETED DEPTH: ", depth, current_best_move)
             depth += 1
     except SearchTimeout:
-        pass
+        print("TIMEOUT")
+        print("LAST BEST = ", best_move)
 
     return best_move
 
@@ -268,10 +283,13 @@ def find_best_move(board, time_limit=5.0):
 def ai_move(req: MoveRequest):
     board = chess.Board(req.fen)
 
-    if board.is_game_over():
+
+    if board.turn == chess.WHITE or board.is_game_over():
+        print("returning because white or game is over")
         return {"move": None, "fen": board.fen()}
 
-    best_move = find_best_move(board, time_limit=1.0)
+    best_move = find_best_move(board, time_limit=5.0)
+    print("Best move: ", best_move)
 
     if best_move is None:
         return {"move": None, "fen": board.fen()}
