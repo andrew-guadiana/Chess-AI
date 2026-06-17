@@ -22,6 +22,8 @@ class MoveRequest(BaseModel):
 class SearchTimeout(Exception):
     pass
 
+TT = {}
+
 PIECE_VALUES = {
     chess.PAWN:    100,
     chess.KNIGHT:  300,
@@ -89,8 +91,17 @@ KING_TABLE = [
 def ordered_moves(board: chess.Board):
     moves = list(board.legal_moves)
 
+    tt_move = None
+    entry = TT.get(board._transposition_key())
+    
+    if entry:
+        tt_move = entry["best_move"]
+
     def move_score(move):
         score = 0
+
+        if tt_move and move.uci() == tt_move:
+            score += 100000
 
         if board.is_capture(move):
             score += 1000
@@ -199,14 +210,28 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
     if time.perf_counter() >= end_time:
         raise SearchTimeout
 
+    key = board._transposition_key()
+    entry = TT.get(key)
+
+    if entry and entry["depth"] >= depth:
+        return entry["score"]
+
     if board.is_game_over():
-        return evaluate_board(board)
+        score = evaluate_board(board)
+
+        TT[key] = {
+            "depth": depth,
+            "score": score,
+            "best_move": None,
+        }
+        return score
 
     if depth == 0:
         return quiescence(board, alpha, beta, maximizing, end_time)
 
     if maximizing:
         best_score = NEG_INF
+        best_move_uci = None
 
         for move in ordered_moves(board):
             print("testing ordered moves...")
@@ -217,16 +242,25 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
                 board.pop()
             print("Score;", move, score)
 
-            best_score = max(best_score, score)
+            if score > best_score:
+                best_score = score
+                best_move_uci = move.uci()
             alpha = max(alpha, best_score)
 
             if alpha >= beta:
                 break
 
+        TT[key] = {
+            "depth": depth,
+            "score": best_score,
+            "best_move": best_move_uci,
+        }
+
         return best_score
 
     else:
         best_score = POS_INF
+        best_move_uci = None
 
         for move in ordered_moves(board):
             board.push(move)
@@ -235,11 +269,19 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
             finally:
                 board.pop()
 
-            best_score = min(best_score, score)
+            if score < best_score:
+                best_score = score
+                best_move_uci = move.uci()
             beta = min(beta, best_score)
 
             if alpha >= beta:
                 break
+
+        TT[key] = {
+            "depth": depth,
+            "score": best_score,
+            "best_move": best_move_uci,
+        }
         
         return best_score
 
@@ -254,7 +296,12 @@ def find_best_move(board, time_limit=5.0):
     try:
         while True:
             print("SEARCH DEPTH: ", depth)
-            current_best_move = list(board.legal_moves)[0].uci()
+            entry = TT.get(board._transposition_key())
+
+            if entry and entry["best_move"]:
+                current_best_move = entry["best_move"]
+            else:
+                current_best_move = list(board.legal_moves)[0].uci()
             current_best_score = POS_INF
 
             for move in ordered_moves(board):
@@ -271,6 +318,11 @@ def find_best_move(board, time_limit=5.0):
 
 
             best_move = current_best_move
+            TT[board._transposition_key()] = {
+                "depth": depth,
+                "score": current_best_score,
+                "best_move": current_best_move,
+            }
             print("COMPLETED DEPTH: ", depth, current_best_move)
             depth += 1
     except SearchTimeout:

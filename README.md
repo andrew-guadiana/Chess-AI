@@ -9,6 +9,7 @@
 - [X] Positional Considerations
 - [X] Iterative Deepening
 - [X] Time limited search
+- [X] Transposition Table & TT Move Ordering
 - [ ] Opening Book
 - [ ] King Safety
 
