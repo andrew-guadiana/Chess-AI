@@ -7,6 +7,7 @@
 - [X] Move ordering
 - [X] Quiescence search
 - [X] Positional Considerations
+- [X] Iterative Deepening
 - [ ] Time limited search
 - [ ] Opening Book
 - [ ] King Safety

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import chess
+import time
 
 app = FastAPI()
 POS_INF = float("inf")
@@ -17,6 +18,9 @@ app.add_middleware(
 
 class MoveRequest(BaseModel):
     fen: str
+
+class SearchTimeout(Exception):
+    pass
 
 PIECE_VALUES = {
     chess.PAWN:    100,
@@ -116,7 +120,10 @@ def noisy_moves(board: chess.Board):
             800 if move.promotion else 0
             ), reverse=True)
 
-def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, depth=8) -> int:
+def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, end_time: float, depth=1) -> int:
+    if time.perf_counter() >= end_time:
+        raise SearchTimeout
+
     stand_pat = evaluate_board(board)
 
     if depth <= 0:
@@ -138,7 +145,7 @@ def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, 
     for move in noisy_moves(board):
         board.push(move)
 
-        score = quiescence(board, alpha, beta, not maximizing, depth - 1)
+        score = quiescence(board, alpha, beta, not maximizing, end_time, depth - 1)
         board.pop()
 
         if maximizing:
@@ -186,19 +193,22 @@ def evaluate_board(board: chess.Board) -> int:
     return score
         
 
-def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximizing: bool) -> int:
+def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximizing: bool, end_time: float) -> int:
+    if time.perf_counter() >= end_time:
+        raise SearchTimeout
+
     if board.is_game_over():
         return evaluate_board(board)
 
     if depth == 0:
-        return quiescence(board, alpha, beta, maximizing)
+        return quiescence(board, alpha, beta, maximizing, end_time)
 
     if maximizing:
         best_score = NEG_INF
 
         for move in ordered_moves(board):
             board.push(move)
-            score = alphabeta(board, depth - 1, alpha, beta, False)
+            score = alphabeta(board, depth - 1, alpha, beta, False, end_time)
             board.pop()
 
             best_score = max(best_score, score)
@@ -214,7 +224,7 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
 
         for move in ordered_moves(board):
             board.push(move)
-            score = alphabeta(board, depth - 1, alpha, beta, True)
+            score = alphabeta(board, depth - 1, alpha, beta, True, end_time)
 
             board.pop()
 
@@ -226,6 +236,33 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
         
         return best_score
 
+def find_best_move(board, time_limit=5.0):
+    end_time = time.perf_counter() + time_limit
+    best_move = None
+
+    depth = 1
+
+    try:
+        while True:
+            current_best_move = None
+            current_best_score = POS_INF
+
+            for move in ordered_moves(board):
+                board.push(move)
+        
+                score = alphabeta(board=board, depth=depth, alpha=NEG_INF, beta=POS_INF, maximizing=True, end_time=end_time)
+                board.pop()
+
+                if score < current_best_score:
+                    current_best_score = score
+                    current_best_move = move.uci()
+
+            best_move = current_best_move
+            depth += 1
+    except SearchTimeout:
+        pass
+
+    return best_move
 
 @app.post("/ai-move")
 def ai_move(req: MoveRequest):
@@ -234,18 +271,14 @@ def ai_move(req: MoveRequest):
     if board.is_game_over():
         return {"move": None, "fen": board.fen()}
 
-    best_move = None
-    best_score = POS_INF
+    best_move = find_best_move(board, time_limit=1.0)
 
-    for move in ordered_moves(board):
-        board.push(move)
-        
-        score = alphabeta(board=board, depth=3, alpha=NEG_INF, beta=POS_INF, maximizing=True)
-        board.pop()
+    if best_move is None:
+        return {"move": None, "fen": board.fen()}
 
-        if score < best_score:
-            best_score = score
-            best_move = move
+    best_move = chess.Move.from_uci(best_move)
+    if best_move not in board.legal_moves:
+        return {"move": None, "fen": board.fen()}
 
     board.push(best_move)
 
