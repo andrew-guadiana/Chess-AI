@@ -27,13 +27,68 @@ PIECE_VALUES = {
     chess.KING:      0,
 }
 
+KNIGHT_TABLE = [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50
+]
+
+PAWN_TABLE = [
+     0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5,  5, 10, 25, 25, 10,  5,  5,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    50, 50, 50, 50, 50, 50, 50, 50,
+     0,  0,  0,  0,  0,  0,  0,  0
+]
+
+BISHOP_TABLE = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20
+]
+
+ROOK_TABLE = [
+     0,  0,  5, 10, 10,  5,  0,  0,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     5, 10, 10, 10, 10, 10, 10,  5,
+     0,  0,  5, 10, 10,  5,  0,  0
+]
+
+KING_TABLE = [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20
+]
+
 def ordered_moves(board: chess.Board):
     moves = list(board.legal_moves)
 
     def move_score(move):
         score = 0
 
-        if board.is_capture(move) or board.is_check():
+        if board.is_capture(move):
             score += 1000
 
             captured = board.piece_at(move.to_square)
@@ -104,17 +159,29 @@ def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, 
 def evaluate_board(board: chess.Board) -> int: 
     if board.is_checkmate():
         return -100000 if board.turn == chess.WHITE else 100000
-    if board.is_stalemate():
+    if board.is_stalemate() or board.is_insufficient_material(): #or board.can_claim_threefold_repetition() or board.can_claim_fifty_moves():
         return 0
 
     score = 0
-    for piece in board.piece_map().values():
+    for square, piece in board.piece_map().items():
         value = PIECE_VALUES[piece.piece_type]
+        pst_bonus = 0
+
+        if   piece.piece_type == chess.PAWN:
+            pst_bonus = PAWN_TABLE[square] if piece.color == chess.WHITE else PAWN_TABLE[chess.square_mirror(square)]
+        elif piece.piece_type == chess.KNIGHT:
+            pst_bonus = KNIGHT_TABLE[square] if piece.color == chess.WHITE else KNIGHT_TABLE[chess.square_mirror(square)]
+        elif piece.piece_type == chess.BISHOP:
+            pst_bonus = BISHOP_TABLE[square] if piece.color == chess.WHITE else BISHOP_TABLE[chess.square_mirror(square)]
+        elif piece.piece_type == chess.ROOK:  
+            pst_bonus = ROOK_TABLE[square] if piece.color == chess.WHITE else ROOK_TABLE[chess.square_mirror(square)]
+        elif piece.piece_type == chess.KING:  
+            pst_bonus = KING_TABLE[square] if piece.color == chess.WHITE else KING_TABLE[chess.square_mirror(square)]
 
         if piece.color == chess.WHITE:
-            score += value
+            score += value + pst_bonus
         else:
-            score -= value
+            score -= value + pst_bonus
 
     return score
         
