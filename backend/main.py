@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import chess
 
 app = FastAPI()
+POS_INF = float("inf")
+NEG_INF = float("-inf")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,7 +33,7 @@ def ordered_moves(board: chess.Board):
     def move_score(move):
         score = 0
 
-        if board.is_capture(move):
+        if board.is_capture(move) or board.is_check():
             score += 1000
 
             captured = board.piece_at(move.to_square)
@@ -45,6 +47,59 @@ def ordered_moves(board: chess.Board):
         
         return score
     return sorted(moves, key=move_score, reverse=True)
+
+def noisy_moves(board: chess.Board):
+    moves = []
+
+    for move in board.legal_moves:
+        if board.is_capture(move) or move.promotion:
+            moves.append(move)
+            
+    return sorted(moves, key=lambda move: (
+        1000 if board.is_capture(move) else 0
+        ) + (
+            800 if move.promotion else 0
+            ), reverse=True)
+
+def quiescence(board: chess.Board, alpha: float, beta: float, maximizing: bool, depth=8) -> int:
+    stand_pat = evaluate_board(board)
+
+    if depth <= 0:
+        return stand_pat
+
+
+    if maximizing:
+        if stand_pat >= beta:
+            return stand_pat
+
+        alpha = max(alpha, stand_pat)
+
+    else:
+        if stand_pat <= alpha:
+            return stand_pat
+
+        beta = min(beta, stand_pat)
+
+    for move in noisy_moves(board):
+        board.push(move)
+
+        score = quiescence(board, alpha, beta, not maximizing, depth - 1)
+        board.pop()
+
+        if maximizing:
+            alpha = max(alpha, score)
+
+            if alpha >= beta:
+                break
+        else:
+            beta = min(beta, score)
+
+            if alpha >= beta:
+                break
+
+    return alpha if maximizing else beta
+
+    
 
 def evaluate_board(board: chess.Board) -> int: 
     if board.is_checkmate():
@@ -65,11 +120,14 @@ def evaluate_board(board: chess.Board) -> int:
         
 
 def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximizing: bool) -> int:
-    if depth == 0 or board.is_game_over():
+    if board.is_game_over():
         return evaluate_board(board)
 
+    if depth == 0:
+        return quiescence(board, alpha, beta, maximizing)
+
     if maximizing:
-        best_score = float("-inf")
+        best_score = NEG_INF
 
         for move in ordered_moves(board):
             board.push(move)
@@ -85,7 +143,7 @@ def alphabeta(board: chess.Board, depth: int, alpha: float, beta: float, maximiz
         return best_score
 
     else:
-        best_score = float("inf")
+        best_score = POS_INF
 
         for move in ordered_moves(board):
             board.push(move)
@@ -110,12 +168,12 @@ def ai_move(req: MoveRequest):
         return {"move": None, "fen": board.fen()}
 
     best_move = None
-    best_score = float("inf")
+    best_score = POS_INF
 
     for move in ordered_moves(board):
         board.push(move)
         
-        score = alphabeta(board=board, depth=3, alpha=float("-inf"), beta=float("inf"), maximizing=True)
+        score = alphabeta(board=board, depth=3, alpha=NEG_INF, beta=POS_INF, maximizing=True)
         board.pop()
 
         if score < best_score:

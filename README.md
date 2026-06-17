@@ -5,7 +5,7 @@
 - [X] Minimax search
 - [X] Alpha-beta pruning
 - [X] Move ordering
-- [ ] Quiescence search
+- [X] Quiescence search
 - [ ] Positional Considerations
 - [ ] Time limited search
 - [ ] Opening Book
